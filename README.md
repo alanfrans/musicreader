@@ -12,7 +12,7 @@ RapidOCR and ONNX Runtime perform recognition locally.
 
 1. Install [Python 3.10 or newer](https://www.python.org/downloads/windows/).
    Enable **Add Python to PATH** during installation.
-2. Put this project in `C:\gitdev\MusicReader-lyrics`.
+2. Put this project in `C:\gitdev\sheet-lyrics`.
 3. Double-click `MusicReader.bat`.
 
 The first launch creates `.venv` and downloads the Python packages and OCR
@@ -39,7 +39,7 @@ invent or language-correct words.
 After the first GUI launch:
 
 ```powershell
-cd C:\gitdev\MusicReader-lyrics
+cd C:\gitdev\sheet-lyrics
 .\.venv\Scripts\musicreader.exe "C:\scans\hymn.jpg" -o lyrics.txt
 ```
 
