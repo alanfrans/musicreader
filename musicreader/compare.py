@@ -26,6 +26,14 @@ _CONTRACTIONS = {
     "rev’ rence": "reverence",
     "o'er": "oer",
 }
+_OCR_SPLITS = {
+    "glo ry": "glory",
+    "redeem er": "redeemer",
+    "devo tion": "devotion",
+    "off rings": "offerings",
+    "offrings": "offerings",
+    "creyou are": "creator you are",
+}
 
 
 def normalize_for_compare(text: str) -> str:
@@ -33,7 +41,13 @@ def normalize_for_compare(text: str) -> str:
     text = _BOILERPLATE.sub("\n", text.replace("\r\n", "\n"))
     lines: list[str] = []
     for line in text.splitlines():
-        if re.search(r"\(judson\)|songselect", line, re.I):
+        if re.search(
+            r"\(judson\)|songselect|ccli\b|copyright|words?:|music:|"
+            r"admin(?:istered)?\b|used\s+by\s+permission|"
+            r"van\s+ness|lifeway|ascap|bmi",
+            line,
+            re.I,
+        ) or re.match(r"\s*(?:©|\(c\)|\d{4}\b)", line, re.I):
             continue
         line = _VERSE_LABEL.sub("", line)
         if re.fullmatch(r"\s*(?:chorus|verse\s*\d*)\s*:?\s*", line, re.I):
@@ -41,6 +55,8 @@ def normalize_for_compare(text: str) -> str:
         lines.append(line)
     text = " ".join(lines).lower()
     for source, replacement in _CONTRACTIONS.items():
+        text = text.replace(source, replacement)
+    for source, replacement in _OCR_SPLITS.items():
         text = text.replace(source, replacement)
     # Syllable hyphens and apostrophes are typography, not lyric changes.
     text = re.sub(r"(?<=[a-z])\s*[-‐‑]\s*(?=[a-z])", "", text)
@@ -64,7 +80,8 @@ class Comparison:
 def compare_text(extracted: str, reference: str) -> Comparison:
     left = normalize_for_compare(extracted)
     right = normalize_for_compare(reference)
-    score = SequenceMatcher(None, left, right).ratio()
+    ordered_score = SequenceMatcher(None, left, right, autojunk=False).ratio()
+    score = max(ordered_score, _fuzzy_token_overlap(left.split(), right.split()))
     diff = "\n".join(
         unified_diff(
             left.split(),
@@ -76,6 +93,29 @@ def compare_text(extracted: str, reference: str) -> Comparison:
         )
     )
     return Comparison(score, left, right, diff)
+
+
+def _fuzzy_token_overlap(left: list[str], right: list[str]) -> float:
+    """Compare words without penalizing a chorus moved after the verses."""
+    if not left or not right:
+        return 0.0
+    unused = set(range(len(right)))
+    matched = 0
+    for token in left:
+        if not unused:
+            break
+        best = max(
+            (
+                (SequenceMatcher(None, token, right[index], autojunk=False).ratio(), index)
+                for index in unused
+            ),
+            default=(0.0, -1),
+        )
+        threshold = 0.80 if len(token) <= 3 else 0.72
+        if best[0] >= threshold:
+            matched += 1
+            unused.remove(best[1])
+    return 2 * matched / (len(left) + len(right))
 
 
 def _records(value: Any) -> list[dict[str, Any]]:
