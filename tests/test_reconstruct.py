@@ -7,6 +7,7 @@ from musicreader.reconstruct import (
     merge_page_verses,
     normalize_lyrics,
     reconstruct_page,
+    reconstruct_page_sections,
     rows_from_boxes,
 )
 
@@ -65,6 +66,33 @@ class ReconstructionTests(unittest.TestCase):
     def test_single_fourth_verse_keeps_its_display_number(self) -> None:
         result = ExtractionResult({4: "Praise to the Lord"})
         self.assertEqual(result.text, "4. Praise to the Lord")
+
+    def test_chorus_can_start_in_a_three_row_system(self) -> None:
+        verses, chorus = reconstruct_page_sections(
+            [
+                [
+                    "Worthy of worship, worthy of praise,",
+                    "Worthy of reverence, worthy of fear,",
+                    "Almighty Father, Master and Lord,",
+                ],
+                [
+                    "Worthy of all the offerings we bring.",
+                    "Worthy of all this and added to these... You are worthy, Father, Creator.",
+                    "Savior and Source of our life without end.",
+                ],
+                ["You are worthy, Savior, Sustainer. You are worthy,"],
+                ["worthy and wonderful; Worthy of worship and praise."],
+            ]
+        )
+        self.assertEqual(
+            verses[2],
+            "Worthy of reverence, worthy of fear, Worthy of all this and added to these...",
+        )
+        self.assertEqual(
+            chorus,
+            "You are worthy, Father, Creator. You are worthy, Savior, Sustainer. "
+            "You are worthy, worthy and wonderful; Worthy of worship and praise.",
+        )
 
 
 if __name__ == "__main__":

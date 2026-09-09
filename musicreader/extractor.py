@@ -11,7 +11,12 @@ from rapidocr import RapidOCR
 
 from .layout import load_pages, lyric_regions
 from .models import ExtractionResult, TextBox
-from .reconstruct import merge_page_verses, reconstruct_page, rows_from_boxes
+from .reconstruct import (
+    merge_page_verses,
+    normalize_lyrics,
+    reconstruct_page_sections,
+    rows_from_boxes,
+)
 
 
 ProgressCallback = Callable[[str], None]
@@ -80,6 +85,7 @@ class LyricExtractor:
         warnings: list[str] = []
         debug_files: list[Path] = []
         page_results: list[dict[int, str]] = []
+        page_choruses: list[str] = []
 
         if self.debug_directory:
             self.debug_directory.mkdir(parents=True, exist_ok=True)
@@ -127,9 +133,13 @@ class LyricExtractor:
                 debug_files.append(page_path)
 
             if system_rows:
-                page_results.append(reconstruct_page(system_rows, self.verses))
+                verses, chorus = reconstruct_page_sections(system_rows, self.verses)
+                page_results.append(verses)
+                if chorus:
+                    page_choruses.append(chorus)
 
         verses = merge_page_verses(page_results)
+        chorus = normalize_lyrics(" ".join(page_choruses))
         if not verses:
             warnings.append(
                 "No lyrics were reconstructed. Try a 300–400 DPI scan with "
@@ -137,5 +147,8 @@ class LyricExtractor:
             )
         self.progress("Finished.")
         return ExtractionResult(
-            verses=verses, warnings=warnings, debug_files=debug_files
+            verses=verses,
+            chorus=chorus,
+            warnings=warnings,
+            debug_files=debug_files,
         )

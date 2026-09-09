@@ -54,6 +54,21 @@ Useful options:
 
 Run `.\.venv\Scripts\musicreader.exe --help` for all options.
 
+Compare an extraction with SongSelect/CCLI text without sending either file
+online:
+
+```powershell
+.\.venv\Scripts\musicreader.exe compare `
+  --image C:\hymnal\consolidatedmusic\jpg\3.jpg `
+  --hymns-json C:\hymnal\consolidatedmusic\hymns.json --number 3
+```
+
+`--number` first matches the `SheetImage` filename (so `3.jpg` is valid even
+when the record's `Number` is different), then falls back to `Number`.
+Comparison ignores verse/chorus labels, CCLI boilerplate, punctuation,
+hyphenated syllables, and common engraved contractions. It prints `MATCH` or
+`DIFFER`, a similarity score, and a compact word diff.
+
 ## Development
 
 ```powershell
