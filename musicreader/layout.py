@@ -71,7 +71,11 @@ def detect_staff_line_centers(image: np.ndarray) -> list[float]:
         cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1)),
     )
     coverage = np.count_nonzero(horizontal, axis=1)
-    candidate_rows = np.flatnonzero(coverage >= width * 0.20)
+    # Faded scans and noteheads can break a rule into short pieces.  A staff
+    # line is still much longer than an ordinary lyric stroke, so use a
+    # conservative-but-lower threshold rather than dropping an entire
+    # five-line staff when one rule has less than 20% coverage.
+    candidate_rows = np.flatnonzero(coverage >= width * 0.08)
     centers = [float(np.mean(run)) for run in _runs(candidate_rows.tolist())]
 
     # Note stems and symbols can interrupt the middle of a thick staff rule,
