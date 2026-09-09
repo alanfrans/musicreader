@@ -32,7 +32,7 @@ _OCR_SPLITS = {
     "creyou are": "creator you are",
 }
 _SECTION_LABEL = re.compile(
-    r"(?<![a-z0-9])(?:verse\s*([1-9]\d*)|([1-9]\d*)\s*[.):]|chorus)(?=\s|$)",
+    r"(?<![a-z0-9])(?:verse\s*([1-9]\d*)|([1-9]\d*)\s*[.):]|chorus)(?=\s|[:.,;]|$)",
     re.IGNORECASE,
 )
 
@@ -112,7 +112,7 @@ def compare_text(extracted: str, reference: str) -> Comparison:
     order_mismatch = bool(
         extracted_order and reference_order and extracted_order != reference_order
     )
-    match = score >= 0.92
+    match = score >= 0.90
     issues: list[dict[str, object]] = []
     if order_mismatch:
         issues.append(

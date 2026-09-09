@@ -96,6 +96,28 @@ from `sunday_mcp.py`):
 `match`, `content_score`, section orders, and structured `issues`; a content
 match can therefore still report a high-severity `verse_order_mismatch`.
 
+To register the tools in Sunday's existing `C:\hymnal\consolidatedmusic\sunday_mcp.py`
+FastMCP host instead of starting a second server, add this alongside its
+existing `mcp = FastMCP("musicreader")` declaration:
+
+```python
+from musicreader.mcp_server import (
+    compare_hymn_lyrics as _compare_hymn_lyrics,
+    extract_hymn_lyrics as _extract_hymn_lyrics,
+)
+
+@mcp.tool()
+def compare_hymn_lyrics(number: str, image_path: str | None = None) -> dict:
+    return _compare_hymn_lyrics(number, image_path)
+
+@mcp.tool()
+def extract_hymn_lyrics(image_path: str) -> dict:
+    return _extract_hymn_lyrics(image_path)
+```
+
+The wrappers avoid creating a second `FastMCP` instance and keep Sunday's
+existing stdio transport and server name.
+
 ## Development
 
 ```powershell

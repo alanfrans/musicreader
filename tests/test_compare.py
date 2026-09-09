@@ -89,6 +89,12 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(result.reference_order, ["1", "chorus", "2", "3"])
         self.assertEqual(result.issues[0]["type"], "verse_order_mismatch")
 
+    def test_colon_after_chorus_is_an_order_label(self) -> None:
+        self.assertEqual(
+            section_order("1. Verse one\n2. Verse two\n3. Verse three\nChorus: You are worthy"),
+            ["1", "2", "3", "chorus"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
