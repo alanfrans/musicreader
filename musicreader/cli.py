@@ -141,7 +141,13 @@ def compare_main(argv: list[str]) -> int:
         return 1
 
     status = "MATCH" if comparison.matches else "DIFFER"
-    print(f"{status} score={comparison.score:.3f}")
+    print(f"{status} content_score={comparison.content_score:.3f}")
+    if comparison.verse_order_mismatch:
+        print(
+            "VERSE_ORDER_MISMATCH "
+            f"extracted={comparison.extracted_order} "
+            f"reference={comparison.reference_order}"
+        )
     if comparison.diff:
         print(comparison.diff)
     for warning in result.warnings:

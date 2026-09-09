@@ -9,9 +9,6 @@ from difflib import SequenceMatcher, unified_diff
 from pathlib import Path
 from typing import Any
 
-from .reconstruct import normalize_lyrics
-
-
 _BOILERPLATE = re.compile(
     r"(?:^|\n)\s*(?:ccli\s+song\s*#?\s*\d+|"
     r"copyright\b.*|admin(?:istered)?\b.*|"
@@ -34,6 +31,10 @@ _OCR_SPLITS = {
     "offrings": "offerings",
     "creyou are": "creator you are",
 }
+_SECTION_LABEL = re.compile(
+    r"(?<![a-z0-9])(?:verse\s*([1-9]\d*)|([1-9]\d*)\s*[.):]|chorus)(?=\s|$)",
+    re.IGNORECASE,
+)
 
 
 def normalize_for_compare(text: str) -> str:
@@ -54,6 +55,8 @@ def normalize_for_compare(text: str) -> str:
             continue
         lines.append(line)
     text = " ".join(lines).lower()
+    # Labels can occur inline in SongSelect exports, not only at line starts.
+    text = _SECTION_LABEL.sub(" ", text)
     for source, replacement in _CONTRACTIONS.items():
         text = text.replace(source, replacement)
     for source, replacement in _OCR_SPLITS.items():
@@ -65,16 +68,38 @@ def normalize_for_compare(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def section_order(text: str) -> list[str]:
+    """Extract the displayed verse/chorus sequence from lyric text."""
+    order: list[str] = []
+    for match in _SECTION_LABEL.finditer(text.replace("\r\n", "\n")):
+        label = "chorus" if match.group(0).lower().startswith("chorus") else (
+            match.group(1) or match.group(2)
+        )
+        if not order or order[-1] != label:
+            order.append(label)
+    return order
+
+
 @dataclass(frozen=True)
 class Comparison:
-    score: float
+    match: bool
+    content_score: float
+    verse_order_mismatch: bool
+    extracted_order: list[str]
+    reference_order: list[str]
+    issues: list[dict[str, object]]
     extracted: str
     reference: str
     diff: str
 
     @property
     def matches(self) -> bool:
-        return self.score >= 0.92
+        return self.match
+
+    @property
+    def score(self) -> float:
+        """Backward-compatible alias for callers using the old result."""
+        return self.content_score
 
 
 def compare_text(extracted: str, reference: str) -> Comparison:
@@ -82,6 +107,32 @@ def compare_text(extracted: str, reference: str) -> Comparison:
     right = normalize_for_compare(reference)
     ordered_score = SequenceMatcher(None, left, right, autojunk=False).ratio()
     score = max(ordered_score, _fuzzy_token_overlap(left.split(), right.split()))
+    extracted_order = section_order(extracted)
+    reference_order = section_order(reference)
+    order_mismatch = bool(
+        extracted_order and reference_order and extracted_order != reference_order
+    )
+    match = score >= 0.92
+    issues: list[dict[str, object]] = []
+    if order_mismatch:
+        issues.append(
+            {
+                "type": "verse_order_mismatch",
+                "severity": "high",
+                "message": "The hymnal and reference arrange verses/chorus differently.",
+                "extracted_order": extracted_order,
+                "reference_order": reference_order,
+            }
+        )
+    if not match:
+        issues.append(
+            {
+                "type": "lyric_content_mismatch",
+                "severity": "high",
+                "message": f"Normalized lyric content similarity is {score:.3f}.",
+                "content_score": score,
+            }
+        )
     diff = "\n".join(
         unified_diff(
             left.split(),
@@ -92,7 +143,17 @@ def compare_text(extracted: str, reference: str) -> Comparison:
             lineterm="",
         )
     )
-    return Comparison(score, left, right, diff)
+    return Comparison(
+        match=match,
+        content_score=score,
+        verse_order_mismatch=order_mismatch,
+        extracted_order=extracted_order,
+        reference_order=reference_order,
+        issues=issues,
+        extracted=left,
+        reference=right,
+        diff=diff,
+    )
 
 
 def _fuzzy_token_overlap(left: list[str], right: list[str]) -> float:

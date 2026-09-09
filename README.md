@@ -69,6 +69,33 @@ Comparison ignores verse/chorus labels, CCLI boilerplate, punctuation,
 hyphenated syllables, and common engraved contractions. It prints `MATCH` or
 `DIFFER`, a similarity score, and a compact word diff.
 
+## Sunday MCP integration
+
+The package includes a stdio FastMCP server with `extract_hymn_lyrics` and
+`compare_hymn_lyrics`. On Alan's Dell, install the package in the same
+environment used by `sunday_mcp.py`:
+
+```powershell
+py -m pip install -e C:\gitdev\sheet-lyrics
+```
+
+Register this command in the host's MCP server configuration (or proxy it
+from `sunday_mcp.py`):
+
+```python
+{
+    "name": "musicreader",
+    "command": r"C:\path\to\python.exe",
+    "args": ["-m", "musicreader.mcp_server"],
+}
+```
+
+`compare_hymn_lyrics(number, image_path=None)` defaults to
+`C:\hymnal\consolidatedmusic\hymns.json` and
+`C:\hymnal\consolidatedmusic\jpg\<SheetImage>`. Its result includes
+`match`, `content_score`, section orders, and structured `issues`; a content
+match can therefore still report a high-severity `verse_order_mismatch`.
+
 ## Development
 
 ```powershell

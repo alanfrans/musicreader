@@ -3,7 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from musicreader.compare import compare_text, normalize_for_compare, reference_from_hymns_json
+from musicreader.compare import (
+    compare_text,
+    normalize_for_compare,
+    reference_from_hymns_json,
+    section_order,
+)
 
 
 class CompareTests(unittest.TestCase):
@@ -66,6 +71,23 @@ class CompareTests(unittest.TestCase):
             lyrics, record = reference_from_hymns_json(path, "3")
             self.assertEqual(lyrics, "right")
             self.assertEqual(record["Number"], 88)
+
+    def test_order_is_reported_separately_from_content(self) -> None:
+        extracted = (
+            "1. First verse words. 2. Second verse words. "
+            "3. Third verse words. Chorus You are worthy."
+        )
+        reference = (
+            "Verse 1 First verse words. Chorus You are worthy. "
+            "Verse 2 Second verse words. Verse 3 Third verse words."
+        )
+        result = compare_text(extracted, reference)
+        self.assertTrue(result.match)
+        self.assertEqual(result.content_score, 1.0)
+        self.assertTrue(result.verse_order_mismatch)
+        self.assertEqual(result.extracted_order, ["1", "2", "3", "chorus"])
+        self.assertEqual(result.reference_order, ["1", "chorus", "2", "3"])
+        self.assertEqual(result.issues[0]["type"], "verse_order_mismatch")
 
 
 if __name__ == "__main__":
