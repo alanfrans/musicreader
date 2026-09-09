@@ -64,7 +64,7 @@ def _build_server():
         from mcp.server.fastmcp import FastMCP
     except ImportError as error:  # pragma: no cover - exercised on setup only
         raise RuntimeError(
-            "Install the optional MCP dependency with: pip install 'mcp>=2.2.0'"
+            "Install the MCP dependency with: pip install 'mcp>=1.30.0,<2'"
         ) from error
 
     server = FastMCP("musicreader")
