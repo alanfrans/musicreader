@@ -11,7 +11,12 @@ from rapidocr import RapidOCR
 
 from .layout import load_pages, lyric_regions
 from .models import ExtractionResult, TextBox
-from .reconstruct import merge_page_verses, reconstruct_page, rows_from_boxes
+from .reconstruct import (
+    merge_page_verses,
+    normalize_lyrics,
+    reconstruct_page_sections,
+    rows_from_boxes,
+)
 
 
 ProgressCallback = Callable[[str], None]
@@ -54,13 +59,18 @@ class LyricExtractor:
         return self._ocr
 
     def _recognize(self, image: np.ndarray) -> list[TextBox]:
+        # The inter-staff band is often only 45–70 pixels high in a 300 DPI
+        # scan.  Grayscale normalization and a larger scale preserve small
+        # engraved glyphs without thresholding away antialiased strokes.
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
         enlarged = cv2.resize(
-            image, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC
+            gray, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC
         )
         result = self.ocr(enlarged)
         if result.boxes is None or result.txts is None or result.scores is None:
             return []
-        scale = 1.5
+        scale = 2.5
         return [
             TextBox(
                 text=str(text),
@@ -80,6 +90,7 @@ class LyricExtractor:
         warnings: list[str] = []
         debug_files: list[Path] = []
         page_results: list[dict[int, str]] = []
+        page_choruses: list[str] = []
 
         if self.debug_directory:
             self.debug_directory.mkdir(parents=True, exist_ok=True)
@@ -127,9 +138,13 @@ class LyricExtractor:
                 debug_files.append(page_path)
 
             if system_rows:
-                page_results.append(reconstruct_page(system_rows, self.verses))
+                verses, chorus = reconstruct_page_sections(system_rows, self.verses)
+                page_results.append(verses)
+                if chorus:
+                    page_choruses.append(chorus)
 
         verses = merge_page_verses(page_results)
+        chorus = normalize_lyrics(" ".join(page_choruses))
         if not verses:
             warnings.append(
                 "No lyrics were reconstructed. Try a 300–400 DPI scan with "
@@ -137,5 +152,8 @@ class LyricExtractor:
             )
         self.progress("Finished.")
         return ExtractionResult(
-            verses=verses, warnings=warnings, debug_files=debug_files
+            verses=verses,
+            chorus=chorus,
+            warnings=warnings,
+            debug_files=debug_files,
         )

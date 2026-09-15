@@ -71,7 +71,11 @@ def detect_staff_line_centers(image: np.ndarray) -> list[float]:
         cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1)),
     )
     coverage = np.count_nonzero(horizontal, axis=1)
-    candidate_rows = np.flatnonzero(coverage >= width * 0.20)
+    # Faded scans and noteheads can break a rule into short pieces.  A staff
+    # line is still much longer than an ordinary lyric stroke, so use a
+    # conservative-but-lower threshold rather than dropping an entire
+    # five-line staff when one rule has less than 20% coverage.
+    candidate_rows = np.flatnonzero(coverage >= width * 0.08)
     centers = [float(np.mean(run)) for run in _runs(candidate_rows.tolist())]
 
     # Note stems and symbols can interrupt the middle of a thick staff rule,
@@ -99,11 +103,12 @@ def group_staves(line_centers: list[float]) -> list[Staff]:
             3 <= median_gap <= 80
             and float(np.max(np.abs(gaps - median_gap))) <= max(2.5, median_gap * 0.35)
         )
-        separated_after = (
-            index + 5 == len(line_centers)
-            or line_centers[index + 5] - lines[-1] > median_gap * 1.7
-        )
-        if regular and separated_after:
+        # Do not require the next rule to be far away.  On scanned hymn
+        # pages, a note stem, a barline, or a bold lyric descender can make a
+        # spurious horizontal candidate immediately after the fifth rule.
+        # Requiring a large gap here used to reject the first treble staff and
+        # pair the bass staff with the next system's treble staff.
+        if regular:
             staves.append(Staff(tuple(lines)))  # type: ignore[arg-type]
             index += 5
         else:
@@ -132,9 +137,12 @@ def lyric_regions(
     for pair_index in range(0, len(staves) - 1, 2):
         treble, bass = staves[pair_index : pair_index + 2]
         spacing = float(np.median([treble.spacing, bass.spacing]))
-        top = max(0, round(treble.lines[-1] + spacing * 0.65))
-        bottom = min(height, round(bass.lines[0] - spacing * 0.65))
-        if bottom - top < spacing * 1.5:
+        # The lyrics live in the inter-staff band.  Keep a small safety
+        # margin from the rules, but do not crop the upper/lower glyphs by
+        # treating the band as an empty gap.
+        top = max(0, round(treble.lines[-1] + spacing * 0.30))
+        bottom = min(height, round(bass.lines[0] - spacing * 0.30))
+        if bottom - top < spacing * 2.0:
             warnings.append(
                 f"Page {page_number}, system {pair_index // 2 + 1}: "
                 "the lyric gap was too small and was skipped."

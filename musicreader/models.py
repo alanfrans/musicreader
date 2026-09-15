@@ -69,6 +69,7 @@ class ExtractionResult:
     """Output returned by :class:`LyricExtractor`."""
 
     verses: dict[int, str]
+    chorus: str = ""
     warnings: list[str] = field(default_factory=list)
     debug_files: list[Path] = field(default_factory=list)
 
@@ -79,4 +80,6 @@ class ExtractionResult:
         for number, verse in sorted(self.verses.items()):
             prefix = f"{number}. " if show_numbers else ""
             chunks.append(f"{prefix}{verse}".strip())
+        if self.chorus:
+            chunks.append(f"Chorus: {self.chorus}")
         return "\n\n".join(chunks)

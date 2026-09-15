@@ -15,6 +15,7 @@ dependencies = [
     "opencv-python>=4.11",
     "PyMuPDF>=1.26",
     "rapidocr>=3.4",
+    "mcp>=1.30.0,<2",
 ]
 
 [project.scripts]

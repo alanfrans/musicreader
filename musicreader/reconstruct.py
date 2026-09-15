@@ -13,6 +13,7 @@ from .models import TextBox
 
 VERSE_NUMBER = re.compile(r"^\s*([1-9])\s*[\.\):]?\s*")
 LETTER = re.compile(r"[A-Za-z]")
+CHORUS_MARKER = re.compile(r"\bYou\s+are\s+wor(?:thy|th-y)\b", re.IGNORECASE)
 
 
 def rows_from_boxes(boxes: list[TextBox], minimum_confidence: float) -> list[str]:
@@ -89,23 +90,69 @@ def reconstruct_page(
 ) -> dict[int, str]:
     """Join corresponding lyric rows across all systems on one page."""
 
+    verses, _ = reconstruct_page_sections(systems, requested_verses)
+    return verses
+
+
+def _split_chorus(text: str) -> tuple[str, str]:
+    """Split a row at the first printed chorus phrase, if present."""
+    text = normalize_lyrics(text)
+    match = CHORUS_MARKER.search(text)
+    if not match:
+        return text, ""
+    return text[: match.start()].strip(), text[match.start() :].strip()
+
+
+def reconstruct_page_sections(
+    systems: list[list[str]], requested_verses: int | None = None
+) -> tuple[dict[int, str], str]:
+    """Reconstruct verses and a chorus that begins part-way through a system.
+
+    Hymnal engravings commonly put the last line of the third verse above the
+    first line of the chorus.  Once the literal chorus phrase is seen, later
+    one-row systems belong to the chorus rather than to verse one.
+    """
+
     systems = [rows for rows in systems if rows]
     if not systems:
-        return {}
+        return {}, ""
 
-    verse_count = estimate_verse_count(systems, requested_verses)
-    first_labels = [verse_label(row) for row in systems[0]]
+    verse_systems: list[list[str]] = []
+    chorus_parts: list[str] = []
+    chorus_started = False
+    for rows in systems:
+        chorus_before_system = chorus_started
+        verse_rows: list[str] = []
+        for row in rows:
+            before, after = _split_chorus(row)
+            if after:
+                chorus_started = True
+                chorus_parts.append(after)
+            if before and not chorus_before_system:
+                verse_rows.append(before)
+            elif before and not after:
+                # A later system without the marker is a continuation of the
+                # chorus.  This text is retained verbatim for comparison.
+                chorus_parts.append(before)
+        if verse_rows:
+            verse_systems.append(verse_rows)
+
+    if not verse_systems:
+        return {}, normalize_lyrics(" ".join(chorus_parts))
+
+    verse_count = estimate_verse_count(verse_systems, requested_verses)
+    first_labels = [verse_label(row) for row in verse_systems[0]]
     explicit = [label for label in first_labels if label is not None]
 
-    if len(explicit) == len(systems[0]):
+    if len(explicit) == len(verse_systems[0]):
         row_labels = [int(label) for label in first_labels if label is not None]
-    elif len(systems[0]) == 1 and explicit:
+    elif len(verse_systems[0]) == 1 and explicit:
         row_labels = explicit
     else:
         row_labels = list(range(1, verse_count + 1))
 
     pieces: dict[int, list[str]] = {label: [] for label in row_labels}
-    for rows in systems:
+    for rows in verse_systems:
         if len(rows) == len(row_labels):
             labels = row_labels
         elif len(rows) == 1 and verse_label(rows[0]) is not None:
@@ -117,11 +164,12 @@ def reconstruct_page(
         for label, row in zip(labels, rows):
             pieces.setdefault(label, []).append(strip_verse_label(row))
 
-    return {
+    verses = {
         label: normalize_lyrics(" ".join(parts))
         for label, parts in pieces.items()
         if any(parts)
     }
+    return verses, normalize_lyrics(" ".join(chorus_parts))
 
 
 def normalize_lyrics(text: str, join_syllables: bool = True) -> str:
